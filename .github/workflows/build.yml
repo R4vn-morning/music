@@ -8,1248 +8,185 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Write project description
+      - name: Unpack project
         run: |
-          cat > code.md <<'EOF_CODE_MD'
-          # کد کامل پروژه موزیک پلیر
-          هر بخش یک فایل است؛ مسیر فایل در عنوان آمده. همان مسیرها را در Android Studio بسازید.
-
-
-          ## README.md
-
-          ```markdown
-          # موزیک پلیر اندروید
-
-          پخش‌کننده‌ی موسیقی آفلاین با Kotlin، Jetpack Compose و Media3.
-
-          ## امکانات
-          - نمایش همه‌ی آهنگ‌های گوشی (از MediaStore) با کاور آلبوم
-          - جستجوی آهنگ و خواننده
-          - پخش در پس‌زمینه با نوتیفیکیشن و کنترل در صفحه قفل
-          - مینی‌پلیر پایین صفحه و صفحه‌ی کامل پخش
-          - بعدی / قبلی، نوار پیشرفت قابل کشیدن، پخش تصادفی، تکرار (همه / یکی)
-          - رابط راست‌به‌چپ، تم روشن/تاریک و رنگ‌های داینامیک (اندروید ۱۲+)
-
-          ## اجرا
-          1. پوشه‌ی پروژه را در Android Studio (نسخه‌ی Koala یا جدیدتر) باز کنید.
-          2. صبر کنید Gradle Sync تمام شود.
-          3. روی گوشی یا شبیه‌ساز (API 24 به بالا) اجرا کنید. روی شبیه‌ساز باید چند فایل mp3 به حافظه اضافه کنید.
-          4. در اولین اجرا دسترسی فایل‌های صوتی و نوتیفیکیشن را تأیید کنید.
-
-          برای ساخت APK: `Build > Build Bundle(s) / APK(s) > Build APK(s)`
-
-          ## ساختار
-          - `MusicRepository.kt` خواندن آهنگ‌ها از حافظه
-          - `PlaybackService.kt` سرویس پخش (ExoPlayer + MediaSession)
-          - `PlayerViewModel.kt` وضعیت و کنترل پخش
-          - `ui/` صفحه‌ها و کامپوننت‌ها
-
-          ```
-
-
-          ## app/build.gradle.kts
-
-          ```kotlin
-          plugins {
-              id("com.android.application")
-              id("org.jetbrains.kotlin.android")
-          }
-
-          android {
-              namespace = "com.example.musicplayer"
-              compileSdk = 34
-
-              defaultConfig {
-                  applicationId = "com.example.musicplayer"
-                  minSdk = 24
-                  targetSdk = 34
-                  versionCode = 1
-                  versionName = "1.0"
-              }
-
-              buildTypes {
-                  release {
-                      isMinifyEnabled = false
-                      proguardFiles(
-                          getDefaultProguardFile("proguard-android-optimize.txt"),
-                          "proguard-rules.pro"
-                      )
-                  }
-              }
-              compileOptions {
-                  sourceCompatibility = JavaVersion.VERSION_17
-                  targetCompatibility = JavaVersion.VERSION_17
-              }
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
-              buildFeatures {
-                  compose = true
-              }
-              composeOptions {
-                  kotlinCompilerExtensionVersion = "1.5.14"
-              }
-          }
-
-          dependencies {
-              val composeBom = platform("androidx.compose:compose-bom:2024.09.00")
-              implementation(composeBom)
-              implementation("androidx.compose.ui:ui")
-              implementation("androidx.compose.material3:material3")
-              implementation("androidx.compose.material:material-icons-extended")
-              implementation("androidx.compose.ui:ui-tooling-preview")
-              debugImplementation("androidx.compose.ui:ui-tooling")
-
-              implementation("androidx.core:core-ktx:1.13.1")
-              implementation("androidx.activity:activity-compose:1.9.2")
-              implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
-              implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
-
-              val media3 = "1.4.1"
-              implementation("androidx.media3:media3-exoplayer:$media3")
-              implementation("androidx.media3:media3-session:$media3")
-              implementation("androidx.media3:media3-ui:$media3")
-              implementation("com.google.guava:guava:33.2.1-android")
-          }
-
-          ```
-
-
-          ## app/proguard-rules.pro
-
-          ```text
-          # Add project specific ProGuard rules here.
-
-          ```
-
-
-          ## app/src/main/AndroidManifest.xml
-
-          ```xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-              <uses-permission
-                  android:name="android.permission.READ_EXTERNAL_STORAGE"
-                  android:maxSdkVersion="32" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-              <application
-                  android:allowBackup="true"
-                  android:label="@string/app_name"
-                  android:supportsRtl="true"
-                  android:theme="@style/Theme.MusicPlayer">
-
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:theme="@style/Theme.MusicPlayer">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-
-                  <service
-                      android:name=".PlaybackService"
-                      android:exported="true"
-                      android:foregroundServiceType="mediaPlayback">
-                      <intent-filter>
-                          <action android:name="androidx.media3.session.MediaSessionService" />
-                      </intent-filter>
-                  </service>
-              </application>
-          </manifest>
-
-          ```
-
-
-          ## app/src/main/java/com/example/musicplayer/MainActivity.kt
-
-          ```kotlin
-          package com.example.musicplayer
-
-          import android.Manifest
-          import android.content.pm.PackageManager
-          import android.os.Build
-          import android.os.Bundle
-          import androidx.activity.ComponentActivity
-          import androidx.activity.compose.BackHandler
-          import androidx.activity.compose.rememberLauncherForActivityResult
-          import androidx.activity.compose.setContent
-          import androidx.activity.result.contract.ActivityResultContracts
-          import androidx.activity.viewModels
-          import androidx.compose.foundation.layout.Box
-          import androidx.compose.foundation.layout.Column
-          import androidx.compose.foundation.layout.fillMaxSize
-          import androidx.compose.foundation.layout.padding
-          import androidx.compose.foundation.layout.statusBarsPadding
-          import androidx.compose.foundation.layout.navigationBarsPadding
-          import androidx.compose.foundation.layout.systemBarsPadding
-          import androidx.compose.material3.Button
-          import androidx.compose.material3.MaterialTheme
-          import androidx.compose.material3.Surface
-          import androidx.compose.material3.Text
-          import androidx.compose.runtime.Composable
-          import androidx.compose.runtime.LaunchedEffect
-          import androidx.compose.runtime.getValue
-          import androidx.compose.runtime.mutableStateOf
-          import androidx.compose.runtime.remember
-          import androidx.compose.runtime.setValue
-          import androidx.compose.ui.Alignment
-          import androidx.compose.ui.Modifier
-          import androidx.compose.ui.platform.LocalContext
-          import androidx.compose.ui.unit.LayoutDirection
-          import androidx.compose.ui.unit.dp
-          import androidx.compose.runtime.CompositionLocalProvider
-          import androidx.compose.ui.platform.LocalLayoutDirection
-          import androidx.core.content.ContextCompat
-          import androidx.lifecycle.compose.collectAsStateWithLifecycle
-          import com.example.musicplayer.ui.MiniPlayer
-          import com.example.musicplayer.ui.MusicPlayerTheme
-          import com.example.musicplayer.ui.NowPlayingScreen
-          import com.example.musicplayer.ui.SongListScreen
-
-          class MainActivity : ComponentActivity() {
-
-              private val viewModel: PlayerViewModel by viewModels()
-
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  setContent {
-                      MusicPlayerTheme {
-                          // رابط کاربری راست‌به‌چپ برای فارسی
-                          CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                              Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                                  PlayerApp(viewModel)
-                              }
-                          }
-                      }
-                  }
-              }
-          }
-
-          private fun audioPermission(): String =
-              if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO
-              else Manifest.permission.READ_EXTERNAL_STORAGE
-
-          @Composable
-          private fun PlayerApp(viewModel: PlayerViewModel) {
-              val context = LocalContext.current
-              val state by viewModel.state.collectAsStateWithLifecycle()
-              var hasPermission by remember {
-                  mutableStateOf(
-                      ContextCompat.checkSelfPermission(context, audioPermission()) ==
-                          PackageManager.PERMISSION_GRANTED
-                  )
-              }
-              var showNowPlaying by remember { mutableStateOf(false) }
-
-              val notificationLauncher =
-                  rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-              val permissionLauncher =
-                  rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-                      hasPermission = granted
-                  }
-
-              LaunchedEffect(Unit) {
-                  if (!hasPermission) permissionLauncher.launch(audioPermission())
-                  if (Build.VERSION.SDK_INT >= 33) {
-                      notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                  }
-              }
-              LaunchedEffect(hasPermission) {
-                  if (hasPermission) viewModel.loadSongs()
-              }
-
-              BackHandler(enabled = showNowPlaying) { showNowPlaying = false }
-
-              if (!hasPermission) {
-                  Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                      Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                          Text("برای نمایش آهنگ‌ها به دسترسی فایل‌های صوتی نیاز داریم")
-                          Button(
-                              onClick = { permissionLauncher.launch(audioPermission()) },
-                              modifier = Modifier.padding(top = 16.dp)
-                          ) { Text("اجازه دسترسی") }
-                      }
-                  }
-                  return
-              }
-
-              Box(Modifier.fillMaxSize().systemBarsPadding()) {
-                  val miniPlayerHeight = if (state.currentSong != null) 80.dp else 0.dp
-
-                  SongListScreen(
-                      state = state,
-                      onQueryChange = viewModel::setQuery,
-                      onSongClick = { viewModel.playSong(it) },
-                      bottomPadding = miniPlayerHeight
-                  )
-
-                  MiniPlayer(
-                      state = state,
-                      onClick = { showNowPlaying = true },
-                      onPlayPause = viewModel::togglePlayPause,
-                      onNext = viewModel::next,
-                      modifier = Modifier.align(Alignment.BottomCenter)
-                  )
-
-                  if (showNowPlaying && state.currentSong != null) {
-                      Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                          NowPlayingScreen(
-                              state = state,
-                              onClose = { showNowPlaying = false },
-                              onPlayPause = viewModel::togglePlayPause,
-                              onNext = viewModel::next,
-                              onPrevious = viewModel::previous,
-                              onSeek = viewModel::seekTo,
-                              onShuffle = viewModel::toggleShuffle,
-                              onRepeat = viewModel::cycleRepeat
-                          )
-                      }
-                  }
-              }
-          }
-
-          ```
-
-
-          ## app/src/main/java/com/example/musicplayer/MusicRepository.kt
-
-          ```kotlin
-          package com.example.musicplayer
-
-          import android.content.ContentUris
-          import android.content.Context
-          import android.net.Uri
-          import android.provider.MediaStore
-          import kotlinx.coroutines.Dispatchers
-          import kotlinx.coroutines.withContext
-
-          class MusicRepository(private val context: Context) {
-
-              suspend fun loadSongs(): List<Song> = withContext(Dispatchers.IO) {
-                  val songs = mutableListOf<Song>()
-                  val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-
-                  val projection = arrayOf(
-                      MediaStore.Audio.Media._ID,
-                      MediaStore.Audio.Media.TITLE,
-                      MediaStore.Audio.Media.ARTIST,
-                      MediaStore.Audio.Media.ALBUM,
-                      MediaStore.Audio.Media.ALBUM_ID,
-                      MediaStore.Audio.Media.DURATION
-                  )
-                  val selection =
-                      "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} >= 30000"
-                  val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
-
-                  context.contentResolver.query(collection, projection, selection, null, sortOrder)
-                      ?.use { cursor ->
-                          val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-                          val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-                          val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-                          val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-                          val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-                          val durCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-
-                          while (cursor.moveToNext()) {
-                              val id = cursor.getLong(idCol)
-                              val albumId = cursor.getLong(albumIdCol)
-                              val artist = cursor.getString(artistCol)
-                                  ?.takeUnless { it == "<unknown>" } ?: "هنرمند ناشناس"
-                              songs += Song(
-                                  id = id,
-                                  title = cursor.getString(titleCol) ?: "بدون عنوان",
-                                  artist = artist,
-                                  album = cursor.getString(albumCol) ?: "",
-                                  durationMs = cursor.getLong(durCol),
-                                  uri = ContentUris.withAppendedId(collection, id),
-                                  albumArtUri = ContentUris.withAppendedId(
-                                      Uri.parse("content://media/external/audio/albumart"), albumId
-                                  )
-                              )
-                          }
-                      }
-                  songs
-              }
-          }
-
-          ```
-
-
-          ## app/src/main/java/com/example/musicplayer/PlaybackService.kt
-
-          ```kotlin
-          package com.example.musicplayer
-
-          import android.app.PendingIntent
-          import android.content.Intent
-          import androidx.media3.common.AudioAttributes
-          import androidx.media3.common.C
-          import androidx.media3.exoplayer.ExoPlayer
-          import androidx.media3.session.MediaSession
-          import androidx.media3.session.MediaSessionService
-
-          /**
-           * سرویس پخش: باعث می‌شود موزیک با بسته شدن اپ هم ادامه پیدا کند
-           * و کنترل‌ها در نوتیفیکیشن و صفحه قفل نمایش داده شوند.
-           */
-          class PlaybackService : MediaSessionService() {
-
-              private var mediaSession: MediaSession? = null
-
-              override fun onCreate() {
-                  super.onCreate()
-                  val player = ExoPlayer.Builder(this)
-                      .setAudioAttributes(
-                          AudioAttributes.Builder()
-                              .setUsage(C.USAGE_MEDIA)
-                              .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                              .build(),
-                          /* handleAudioFocus = */ true
-                      )
-                      .setHandleAudioBecomingNoisy(true)
-                      .build()
-
-                  val sessionActivity = PendingIntent.getActivity(
-                      this,
-                      0,
-                      Intent(this, MainActivity::class.java),
-                      PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                  )
-
-                  mediaSession = MediaSession.Builder(this, player)
-                      .setSessionActivity(sessionActivity)
-                      .build()
-              }
-
-              override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
-                  mediaSession
-
-              override fun onTaskRemoved(rootIntent: Intent?) {
-                  val player = mediaSession?.player
-                  if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
-                      stopSelf()
-                  }
-              }
-
-              override fun onDestroy() {
-                  mediaSession?.run {
-                      player.release()
-                      release()
-                  }
-                  mediaSession = null
-                  super.onDestroy()
-              }
-          }
-
-          ```
-
-
-          ## app/src/main/java/com/example/musicplayer/PlayerViewModel.kt
-
-          ```kotlin
-          package com.example.musicplayer
-
-          import android.app.Application
-          import android.content.ComponentName
-          import androidx.lifecycle.AndroidViewModel
-          import androidx.lifecycle.viewModelScope
-          import androidx.media3.common.MediaItem
-          import androidx.media3.common.MediaMetadata
-          import androidx.media3.common.Player
-          import androidx.media3.session.MediaController
-          import androidx.media3.session.SessionToken
-          import com.google.common.util.concurrent.MoreExecutors
-          import kotlinx.coroutines.delay
-          import kotlinx.coroutines.flow.MutableStateFlow
-          import kotlinx.coroutines.flow.StateFlow
-          import kotlinx.coroutines.flow.asStateFlow
-          import kotlinx.coroutines.flow.update
-          import kotlinx.coroutines.isActive
-          import kotlinx.coroutines.launch
-
-          data class PlayerUiState(
-              val songs: List<Song> = emptyList(),
-              val isLoading: Boolean = false,
-              val query: String = "",
-              val currentSong: Song? = null,
-              val isPlaying: Boolean = false,
-              val positionMs: Long = 0L,
-              val durationMs: Long = 0L,
-              val shuffle: Boolean = false,
-              val repeatMode: Int = Player.REPEAT_MODE_OFF
-          ) {
-              val filteredSongs: List<Song>
-                  get() = if (query.isBlank()) songs else songs.filter {
-                      it.title.contains(query, ignoreCase = true) ||
-                          it.artist.contains(query, ignoreCase = true)
-                  }
-          }
-
-          class PlayerViewModel(app: Application) : AndroidViewModel(app) {
-
-              private val repository = MusicRepository(app)
-              private val _state = MutableStateFlow(PlayerUiState())
-              val state: StateFlow<PlayerUiState> = _state.asStateFlow()
-
-              private var controller: MediaController? = null
-
-              private val listener = object : Player.Listener {
-                  override fun onIsPlayingChanged(isPlaying: Boolean) {
-                      _state.update { it.copy(isPlaying = isPlaying) }
-                  }
-
-                  override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                      val id = mediaItem?.mediaId?.toLongOrNull()
-                      _state.update { s ->
-                          s.copy(
-                              currentSong = s.songs.firstOrNull { it.id == id },
-                              positionMs = 0L,
-                              durationMs = controller?.duration?.takeIf { it > 0 } ?: s.durationMs
-                          )
-                      }
-                  }
-
-                  override fun onPlaybackStateChanged(playbackState: Int) {
-                      if (playbackState == Player.STATE_READY) {
-                          _state.update { it.copy(durationMs = controller?.duration ?: 0L) }
-                      }
-                  }
-
-                  override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
-                      _state.update { it.copy(shuffle = shuffleModeEnabled) }
-                  }
-
-                  override fun onRepeatModeChanged(repeatMode: Int) {
-                      _state.update { it.copy(repeatMode = repeatMode) }
-                  }
-              }
-
-              init {
-                  connectToService()
-                  startPositionTicker()
-              }
-
-              private fun connectToService() {
-                  val context = getApplication<Application>()
-                  val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-                  val future = MediaController.Builder(context, token).buildAsync()
-                  future.addListener({
-                      controller = future.get().also { it.addListener(listener) }
-                  }, MoreExecutors.directExecutor())
-              }
-
-              private fun startPositionTicker() {
-                  viewModelScope.launch {
-                      while (isActive) {
-                          controller?.let { c ->
-                              if (c.isPlaying) {
-                                  _state.update { it.copy(positionMs = c.currentPosition) }
-                              }
-                          }
-                          delay(500)
-                      }
-                  }
-              }
-
-              fun loadSongs() {
-                  viewModelScope.launch {
-                      _state.update { it.copy(isLoading = true) }
-                      val songs = repository.loadSongs()
-                      _state.update { it.copy(songs = songs, isLoading = false) }
-                  }
-              }
-
-              fun setQuery(q: String) = _state.update { it.copy(query = q) }
-
-              fun playSong(song: Song) {
-                  val c = controller ?: return
-                  val list = _state.value.filteredSongs
-                  val index = list.indexOfFirst { it.id == song.id }
-                  if (index < 0) return
-                  c.setMediaItems(list.map { it.toMediaItem() }, index, 0L)
-                  c.prepare()
-                  c.play()
-                  _state.update { it.copy(currentSong = song, positionMs = 0L, durationMs = song.durationMs) }
-              }
-
-              fun togglePlayPause() {
-                  val c = controller ?: return
-                  if (c.isPlaying) c.pause() else c.play()
-              }
-
-              fun next() { controller?.seekToNextMediaItem() }
-
-              fun previous() {
-                  val c = controller ?: return
-                  if (c.currentPosition > 3000) c.seekTo(0) else c.seekToPreviousMediaItem()
-              }
-
-              fun seekTo(ms: Long) {
-                  controller?.seekTo(ms)
-                  _state.update { it.copy(positionMs = ms) }
-              }
-
-              fun toggleShuffle() {
-                  controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }
-              }
-
-              fun cycleRepeat() {
-                  controller?.let {
-                      it.repeatMode = when (it.repeatMode) {
-                          Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                          Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                          else -> Player.REPEAT_MODE_OFF
-                      }
-                  }
-              }
-
-              override fun onCleared() {
-                  controller?.removeListener(listener)
-                  controller?.release()
-                  controller = null
-                  super.onCleared()
-              }
-
-              private fun Song.toMediaItem(): MediaItem =
-                  MediaItem.Builder()
-                      .setMediaId(id.toString())
-                      .setUri(uri)
-                      .setMediaMetadata(
-                          MediaMetadata.Builder()
-                              .setTitle(title)
-                              .setArtist(artist)
-                              .setAlbumTitle(album)
-                              .setArtworkUri(albumArtUri)
-                              .build()
-                      )
-                      .build()
-          }
-
-          ```
-
-
-          ## app/src/main/java/com/example/musicplayer/Song.kt
-
-          ```kotlin
-          package com.example.musicplayer
-
-          import android.net.Uri
-
-          data class Song(
-              val id: Long,
-              val title: String,
-              val artist: String,
-              val album: String,
-              val durationMs: Long,
-              val uri: Uri,
-              val albumArtUri: Uri?
-          )
-
-          ```
-
-
-          ## app/src/main/java/com/example/musicplayer/ui/Components.kt
-
-          ```kotlin
-          package com.example.musicplayer.ui
-
-          import androidx.compose.foundation.layout.Box
-          import androidx.compose.foundation.layout.size
-          import androidx.compose.foundation.shape.RoundedCornerShape
-          import androidx.compose.material.icons.Icons
-          import androidx.compose.material.icons.filled.MusicNote
-          import androidx.compose.material3.Icon
-          import androidx.compose.material3.MaterialTheme
-          import androidx.compose.runtime.Composable
-          import androidx.compose.runtime.getValue
-          import androidx.compose.runtime.mutableStateOf
-          import androidx.compose.runtime.remember
-          import androidx.compose.runtime.setValue
-          import androidx.compose.runtime.LaunchedEffect
-          import androidx.compose.foundation.Image
-          import androidx.compose.foundation.background
-          import androidx.compose.ui.Alignment
-          import androidx.compose.ui.Modifier
-          import androidx.compose.ui.draw.clip
-          import androidx.compose.ui.graphics.ImageBitmap
-          import androidx.compose.ui.graphics.asImageBitmap
-          import androidx.compose.ui.layout.ContentScale
-          import androidx.compose.ui.platform.LocalContext
-          import androidx.compose.ui.unit.Dp
-          import androidx.compose.ui.unit.dp
-          import android.net.Uri
-          import android.graphics.BitmapFactory
-          import kotlinx.coroutines.Dispatchers
-          import kotlinx.coroutines.withContext
-
-          /** نمایش کاور آلبوم؛ اگر کاور نبود آیکون نت موسیقی نشان داده می‌شود. */
-          @Composable
-          fun AlbumArt(uri: Uri?, size: Dp, modifier: Modifier = Modifier) {
-              val context = LocalContext.current
-              var bitmap by remember(uri) { mutableStateOf<ImageBitmap?>(null) }
-
-              LaunchedEffect(uri) {
-                  bitmap = if (uri == null) null else withContext(Dispatchers.IO) {
-                      try {
-                          context.contentResolver.openInputStream(uri)?.use {
-                              BitmapFactory.decodeStream(it)?.asImageBitmap()
-                          }
-                      } catch (e: Exception) {
-                          null
-                      }
-                  }
-              }
-
-              Box(
-                  modifier = modifier
-                      .size(size)
-                      .clip(RoundedCornerShape(size / 8))
-                      .background(MaterialTheme.colorScheme.secondaryContainer),
-                  contentAlignment = Alignment.Center
-              ) {
-                  val bmp = bitmap
-                  if (bmp != null) {
-                      Image(
-                          bitmap = bmp,
-                          contentDescription = null,
-                          contentScale = ContentScale.Crop,
-                          modifier = Modifier.size(size)
-                      )
-                  } else {
-                      Icon(
-                          Icons.Filled.MusicNote,
-                          contentDescription = null,
-                          modifier = Modifier.size(size / 2),
-                          tint = MaterialTheme.colorScheme.onSecondaryContainer
-                      )
-                  }
-              }
-          }
-
-          fun formatTime(ms: Long): String {
-              val totalSec = (ms.coerceAtLeast(0) / 1000).toInt()
-              return "%d:%02d".format(totalSec / 60, totalSec % 60)
-          }
-
-          ```
-
-
-          ## app/src/main/java/com/example/musicplayer/ui/MiniPlayer.kt
-
-          ```kotlin
-          package com.example.musicplayer.ui
-
-          import androidx.compose.foundation.clickable
-          import androidx.compose.foundation.layout.Column
-          import androidx.compose.foundation.layout.Row
-          import androidx.compose.foundation.layout.fillMaxWidth
-          import androidx.compose.foundation.layout.padding
-          import androidx.compose.material.icons.Icons
-          import androidx.compose.material.icons.filled.Pause
-          import androidx.compose.material.icons.filled.PlayArrow
-          import androidx.compose.material.icons.filled.SkipNext
-          import androidx.compose.material3.Icon
-          import androidx.compose.material3.IconButton
-          import androidx.compose.material3.LinearProgressIndicator
-          import androidx.compose.material3.MaterialTheme
-          import androidx.compose.material3.Surface
-          import androidx.compose.material3.Text
-          import androidx.compose.runtime.Composable
-          import androidx.compose.ui.Alignment
-          import androidx.compose.ui.Modifier
-          import androidx.compose.ui.text.style.TextOverflow
-          import androidx.compose.ui.unit.dp
-          import com.example.musicplayer.PlayerUiState
-
-          @Composable
-          fun MiniPlayer(
-              state: PlayerUiState,
-              onClick: () -> Unit,
-              onPlayPause: () -> Unit,
-              onNext: () -> Unit,
-              modifier: Modifier = Modifier
-          ) {
-              val song = state.currentSong ?: return
-              Surface(
-                  modifier = modifier.fillMaxWidth(),
-                  tonalElevation = 6.dp,
-                  shadowElevation = 6.dp
-              ) {
-                  Column(Modifier.clickable(onClick = onClick)) {
-                      LinearProgressIndicator(
-                          progress = {
-                              if (state.durationMs > 0)
-                                  (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f)
-                              else 0f
-                          },
-                          modifier = Modifier.fillMaxWidth()
-                      )
-                      Row(
-                          modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                          verticalAlignment = Alignment.CenterVertically
-                      ) {
-                          AlbumArt(uri = song.albumArtUri, size = 44.dp)
-                          Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                              Text(
-                                  song.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                  style = MaterialTheme.typography.titleSmall
-                              )
-                              Text(
-                                  song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                  style = MaterialTheme.typography.bodySmall,
-                                  color = MaterialTheme.colorScheme.onSurfaceVariant
-                              )
-                          }
-                          IconButton(onClick = onPlayPause) {
-                              Icon(
-                                  if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                  contentDescription = if (state.isPlaying) "توقف" else "پخش"
-                              )
-                          }
-                          IconButton(onClick = onNext) {
-                              Icon(Icons.Filled.SkipNext, contentDescription = "بعدی")
-                          }
-                      }
-                  }
-              }
-          }
-
-          ```
-
-
-          ## app/src/main/java/com/example/musicplayer/ui/NowPlayingScreen.kt
-
-          ```kotlin
-          package com.example.musicplayer.ui
-
-          import androidx.compose.foundation.layout.Arrangement
-          import androidx.compose.foundation.layout.Column
-          import androidx.compose.foundation.layout.Row
-          import androidx.compose.foundation.layout.Spacer
-          import androidx.compose.foundation.layout.fillMaxSize
-          import androidx.compose.foundation.layout.fillMaxWidth
-          import androidx.compose.foundation.layout.height
-          import androidx.compose.foundation.layout.padding
-          import androidx.compose.foundation.layout.size
-          import androidx.compose.material.icons.Icons
-          import androidx.compose.material.icons.filled.KeyboardArrowDown
-          import androidx.compose.material.icons.filled.Pause
-          import androidx.compose.material.icons.filled.PlayArrow
-          import androidx.compose.material.icons.filled.Repeat
-          import androidx.compose.material.icons.filled.RepeatOne
-          import androidx.compose.material.icons.filled.Shuffle
-          import androidx.compose.material.icons.filled.SkipNext
-          import androidx.compose.material.icons.filled.SkipPrevious
-          import androidx.compose.material3.FilledIconButton
-          import androidx.compose.material3.Icon
-          import androidx.compose.material3.IconButton
-          import androidx.compose.material3.MaterialTheme
-          import androidx.compose.material3.Slider
-          import androidx.compose.material3.Text
-          import androidx.compose.runtime.Composable
-          import androidx.compose.runtime.getValue
-          import androidx.compose.runtime.mutableStateOf
-          import androidx.compose.runtime.remember
-          import androidx.compose.runtime.setValue
-          import androidx.compose.ui.Alignment
-          import androidx.compose.ui.Modifier
-          import androidx.compose.ui.text.style.TextAlign
-          import androidx.compose.ui.text.style.TextOverflow
-          import androidx.compose.ui.unit.dp
-          import androidx.media3.common.Player
-          import com.example.musicplayer.PlayerUiState
-
-          @Composable
-          fun NowPlayingScreen(
-              state: PlayerUiState,
-              onClose: () -> Unit,
-              onPlayPause: () -> Unit,
-              onNext: () -> Unit,
-              onPrevious: () -> Unit,
-              onSeek: (Long) -> Unit,
-              onShuffle: () -> Unit,
-              onRepeat: () -> Unit,
-              modifier: Modifier = Modifier
-          ) {
-              val song = state.currentSong ?: return
-              var dragging by remember { mutableStateOf(false) }
-              var dragValue by remember { mutableStateOf(0f) }
-              val duration = state.durationMs.coerceAtLeast(1L)
-              val sliderValue = if (dragging) dragValue else state.positionMs.toFloat()
-
-              Column(
-                  modifier = modifier
-                      .fillMaxSize()
-                      .padding(horizontal = 24.dp, vertical = 16.dp),
-                  horizontalAlignment = Alignment.CenterHorizontally
-              ) {
-                  Row(Modifier.fillMaxWidth()) {
-                      IconButton(onClick = onClose) {
-                          Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "بستن")
-                      }
-                  }
-
-                  Spacer(Modifier.height(16.dp))
-                  AlbumArt(uri = song.albumArtUri, size = 300.dp)
-                  Spacer(Modifier.height(32.dp))
-
-                  Text(
-                      song.title,
-                      style = MaterialTheme.typography.headlineSmall,
-                      maxLines = 1,
-                      overflow = TextOverflow.Ellipsis,
-                      textAlign = TextAlign.Center
-                  )
-                  Text(
-                      song.artist,
-                      style = MaterialTheme.typography.bodyLarge,
-                      color = MaterialTheme.colorScheme.onSurfaceVariant,
-                      maxLines = 1,
-                      overflow = TextOverflow.Ellipsis
-                  )
-
-                  Spacer(Modifier.height(24.dp))
-
-                  Slider(
-                      value = sliderValue.coerceIn(0f, duration.toFloat()),
-                      valueRange = 0f..duration.toFloat(),
-                      onValueChange = { dragging = true; dragValue = it },
-                      onValueChangeFinished = { onSeek(dragValue.toLong()); dragging = false }
-                  )
-                  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                      Text(formatTime(sliderValue.toLong()), style = MaterialTheme.typography.labelMedium)
-                      Text(formatTime(state.durationMs), style = MaterialTheme.typography.labelMedium)
-                  }
-
-                  Spacer(Modifier.height(16.dp))
-
-                  Row(
-                      Modifier.fillMaxWidth(),
-                      horizontalArrangement = Arrangement.SpaceEvenly,
-                      verticalAlignment = Alignment.CenterVertically
-                  ) {
-                      IconButton(onClick = onShuffle) {
-                          Icon(
-                              Icons.Filled.Shuffle, contentDescription = "پخش تصادفی",
-                              tint = if (state.shuffle) MaterialTheme.colorScheme.primary
-                              else MaterialTheme.colorScheme.onSurfaceVariant
-                          )
-                      }
-                      IconButton(onClick = onPrevious, modifier = Modifier.size(56.dp)) {
-                          Icon(Icons.Filled.SkipPrevious, contentDescription = "قبلی", modifier = Modifier.size(36.dp))
-                      }
-                      FilledIconButton(onClick = onPlayPause, modifier = Modifier.size(72.dp)) {
-                          Icon(
-                              if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                              contentDescription = if (state.isPlaying) "توقف" else "پخش",
-                              modifier = Modifier.size(40.dp)
-                          )
-                      }
-                      IconButton(onClick = onNext, modifier = Modifier.size(56.dp)) {
-                          Icon(Icons.Filled.SkipNext, contentDescription = "بعدی", modifier = Modifier.size(36.dp))
-                      }
-                      IconButton(onClick = onRepeat) {
-                          Icon(
-                              if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Filled.RepeatOne
-                              else Icons.Filled.Repeat,
-                              contentDescription = "تکرار",
-                              tint = if (state.repeatMode != Player.REPEAT_MODE_OFF)
-                                  MaterialTheme.colorScheme.primary
-                              else MaterialTheme.colorScheme.onSurfaceVariant
-                          )
-                      }
-                  }
-              }
-          }
-
-          ```
-
-
-          ## app/src/main/java/com/example/musicplayer/ui/SongListScreen.kt
-
-          ```kotlin
-          package com.example.musicplayer.ui
-
-          import androidx.compose.foundation.clickable
-          import androidx.compose.foundation.layout.Arrangement
-          import androidx.compose.foundation.layout.Box
-          import androidx.compose.foundation.layout.Column
-          import androidx.compose.foundation.layout.PaddingValues
-          import androidx.compose.foundation.layout.Row
-          import androidx.compose.foundation.layout.fillMaxSize
-          import androidx.compose.foundation.layout.fillMaxWidth
-          import androidx.compose.foundation.layout.padding
-          import androidx.compose.foundation.lazy.LazyColumn
-          import androidx.compose.foundation.lazy.items
-          import androidx.compose.foundation.text.KeyboardOptions
-          import androidx.compose.material.icons.Icons
-          import androidx.compose.material.icons.filled.Search
-          import androidx.compose.material3.CircularProgressIndicator
-          import androidx.compose.material3.ExperimentalMaterial3Api
-          import androidx.compose.material3.Icon
-          import androidx.compose.material3.MaterialTheme
-          import androidx.compose.material3.OutlinedTextField
-          import androidx.compose.material3.Text
-          import androidx.compose.runtime.Composable
-          import androidx.compose.ui.Alignment
-          import androidx.compose.ui.Modifier
-          import androidx.compose.ui.text.style.TextOverflow
-          import androidx.compose.ui.unit.dp
-          import com.example.musicplayer.PlayerUiState
-          import com.example.musicplayer.Song
-
-          @OptIn(ExperimentalMaterial3Api::class)
-          @Composable
-          fun SongListScreen(
-              state: PlayerUiState,
-              onQueryChange: (String) -> Unit,
-              onSongClick: (Song) -> Unit,
-              bottomPadding: androidx.compose.ui.unit.Dp,
-              modifier: Modifier = Modifier
-          ) {
-              Column(modifier = modifier.fillMaxSize()) {
-                  OutlinedTextField(
-                      value = state.query,
-                      onValueChange = onQueryChange,
-                      singleLine = true,
-                      placeholder = { Text("جستجوی آهنگ یا خواننده") },
-                      leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                      keyboardOptions = KeyboardOptions.Default,
-                      modifier = Modifier
-                          .fillMaxWidth()
-                          .padding(horizontal = 16.dp, vertical = 8.dp)
-                  )
-
-                  val songs = state.filteredSongs
-                  when {
-                      state.isLoading -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                          CircularProgressIndicator()
-                      }
-                      songs.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                          Text(
-                              if (state.query.isBlank()) "آهنگی روی گوشی پیدا نشد" else "نتیجه‌ای پیدا نشد",
-                              style = MaterialTheme.typography.bodyLarge
-                          )
-                      }
-                      else -> LazyColumn(
-                          contentPadding = PaddingValues(bottom = bottomPadding),
-                          verticalArrangement = Arrangement.spacedBy(2.dp)
-                      ) {
-                          items(songs, key = { it.id }) { song ->
-                              SongRow(
-                                  song = song,
-                                  isCurrent = song.id == state.currentSong?.id,
-                                  onClick = { onSongClick(song) }
-                              )
-                          }
-                      }
-                  }
-              }
-          }
-
-          @Composable
-          private fun SongRow(song: Song, isCurrent: Boolean, onClick: () -> Unit) {
-              Row(
-                  modifier = Modifier
-                      .fillMaxWidth()
-                      .clickable(onClick = onClick)
-                      .padding(horizontal = 16.dp, vertical = 8.dp),
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(12.dp)
-              ) {
-                  AlbumArt(uri = song.albumArtUri, size = 52.dp)
-                  Column(modifier = Modifier.weight(1f)) {
-                      Text(
-                          song.title,
-                          maxLines = 1,
-                          overflow = TextOverflow.Ellipsis,
-                          style = MaterialTheme.typography.titleMedium,
-                          color = if (isCurrent) MaterialTheme.colorScheme.primary
-                          else MaterialTheme.colorScheme.onSurface
-                      )
-                      Text(
-                          song.artist,
-                          maxLines = 1,
-                          overflow = TextOverflow.Ellipsis,
-                          style = MaterialTheme.typography.bodyMedium,
-                          color = MaterialTheme.colorScheme.onSurfaceVariant
-                      )
-                  }
-                  Text(
-                      formatTime(song.durationMs),
-                      style = MaterialTheme.typography.labelMedium,
-                      color = MaterialTheme.colorScheme.onSurfaceVariant
-                  )
-              }
-          }
-
-          ```
-
-
-          ## app/src/main/java/com/example/musicplayer/ui/Theme.kt
-
-          ```kotlin
-          package com.example.musicplayer.ui
-
-          import android.os.Build
-          import androidx.compose.foundation.isSystemInDarkTheme
-          import androidx.compose.material3.MaterialTheme
-          import androidx.compose.material3.darkColorScheme
-          import androidx.compose.material3.dynamicDarkColorScheme
-          import androidx.compose.material3.dynamicLightColorScheme
-          import androidx.compose.material3.lightColorScheme
-          import androidx.compose.runtime.Composable
-          import androidx.compose.ui.graphics.Color
-          import androidx.compose.ui.platform.LocalContext
-
-          private val DarkColors = darkColorScheme(
-              primary = Color(0xFF9FD0FF),
-              secondary = Color(0xFFB7C9DB),
-              background = Color(0xFF101418),
-              surface = Color(0xFF101418)
-          )
-
-          private val LightColors = lightColorScheme(
-              primary = Color(0xFF00629D),
-              secondary = Color(0xFF51606F),
-              background = Color(0xFFFCFCFF),
-              surface = Color(0xFFFCFCFF)
-          )
-
-          @Composable
-          fun MusicPlayerTheme(
-              darkTheme: Boolean = isSystemInDarkTheme(),
-              content: @Composable () -> Unit
-          ) {
-              val colors = when {
-                  Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                      val ctx = LocalContext.current
-                      if (darkTheme) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-                  }
-                  darkTheme -> DarkColors
-                  else -> LightColors
-              }
-              MaterialTheme(colorScheme = colors, content = content)
-          }
-
-          ```
-
-
-          ## app/src/main/res/values/strings.xml
-
-          ```xml
-          <resources>
-              <string name="app_name">موزیک پلیر</string>
-          </resources>
-
-          ```
-
-
-          ## app/src/main/res/values/themes.xml
-
-          ```xml
-          <resources>
-              <style name="Theme.MusicPlayer" parent="android:Theme.Material.NoActionBar" />
-          </resources>
-
-          ```
-
-
-          ## build.gradle.kts
-
-          ```kotlin
-          plugins {
-              id("com.android.application") version "8.5.2" apply false
-              id("org.jetbrains.kotlin.android") version "1.9.24" apply false
-          }
-
-          ```
-
-
-          ## gradle.properties
-
-          ```text
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          android.useAndroidX=true
-          kotlin.code.style=official
-          android.nonTransitiveRClass=true
-
-          ```
-
-
-          ## gradle/wrapper/gradle-wrapper.properties
-
-          ```text
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-
-          ```
-
-
-          ## settings.gradle.kts
-
-          ```kotlin
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.name = "MusicPlayer"
-          include(":app")
-
-          ```
-          EOF_CODE_MD
-
-      - name: Generate project files
-        run: |
-          python3 - <<'PY'
-          import re, os
-          text = open("code.md", encoding="utf-8").read()
-          pattern = re.compile(r"\n## (\S+)\n\n```\w*\n(.*?)\n```\n", re.S)
-          files = pattern.findall("\n" + text + "\n")
-          print("files found:", len(files))
-          for path, body in files:
-              dest = os.path.join("proj", path)
-              os.makedirs(os.path.dirname(dest), exist_ok=True)
-              with open(dest, "w", encoding="utf-8") as f:
-                  f.write(body + "\n")
-          PY
-          find proj -type f | sort
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: 8.7
-
-      - name: Build debug APK
-        working-directory: proj
-        run: gradle assembleDebug --stacktrace
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: MusicPlayer-apk
-          path: proj/app/build/outputs/apk/debug/*.apk
+          cat > project.b64 <<'EOF_B64'
+          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
